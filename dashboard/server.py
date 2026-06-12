@@ -195,8 +195,8 @@ def load_projects():
                 with open(sf) as f: sessions = json.load(f).get("sessions", [])
             except: pass
         projects.append({"name": name, "session_count": len(sessions), "sessions": sessions[:5],
-            "created": sessions[0]["timestamp"] if sessions else "N/A",
-            "task_count": len(set(s["task"] for s in sessions))})
+            "created": sessions[0].get("logged_at", sessions[0].get("timestamp", "N/A")) if sessions else "N/A",
+            "task_count": len(set(s.get("task","") for s in sessions))})
     return {"projects": projects, "count": len(projects)}
 
 def enrich_projects(projects_data, cfg):

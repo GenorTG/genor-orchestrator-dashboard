@@ -178,6 +178,7 @@ select.inp{cursor:pointer}
         <div class="tbp" data-dtab="notes" onclick="switchDocTab('notes')">📝 NOTES</div>
         <div class="tbp" data-dtab="sessions" onclick="switchDocTab('sessions')">⚡ Sessions</div>
         <div class="tbp" data-dtab="files" onclick="switchDocTab('files')">📁 Files</div>
+        <div class="tbp" data-dtab="agent" onclick="switchDocTab('agent')">🤖 Manager</div>
       </div>
       <!-- Editor area -->
       <div id="docEditorArea" style="margin-top:12px">
@@ -203,6 +204,25 @@ select.inp{cursor:pointer}
           <button class="btn btn-g btn-xs" onclick="createDocFile()">+ Create File</button>
         </div>
         <div id="projFilesList"></div>
+      </div>
+      <!-- Manager session view -->
+      <div id="docAgentArea" style="display:none;margin-top:12px">
+        <div class="card">
+          <h2 style="margin-bottom:8px">🤖 Manager Session</h2>
+          <div id="managerInfo" style="font-size:13px">
+            <div class="fr"><div class="fl">Status</div><div class="fv" id="mgStatus"><span class="pill g">Active</span></div></div>
+            <div class="fr"><div class="fl">OpenClaw Session</div><div class="fv" id="mgSession">—</div></div>
+            <div class="fr"><div class="fl">Current Task</div><div class="fv" id="mgTask">—</div></div>
+            <div class="fr"><div class="fl">Model</div><div class="fv" id="mgModel">—</div></div>
+            <div class="fr"><div class="fl">Sub-agents</div><div class="fv" id="mgSubCount">0</div></div>
+          </div>
+        </div>
+        <div class="card">
+          <h2 style="margin-bottom:8px">🌳 Sub-Agent Tree</h2>
+          <div id="subAgentTree" style="font-size:12px;font-family:monospace;line-height:1.8">
+            <div style="color:var(--muted)">No active sub-agents.</div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -617,25 +637,36 @@ function renderProjects(){
   if(!p||!p.projects.length){
     document.getElementById('pstats').innerHTML='<div class="card">No projects yet.</div>';return;
   }
+  const cfg=D.config||{},pc=cfg.projects||{};
   document.getElementById('pstats').innerHTML=`
     <div class="card st"><div class="v">${p.count}</div><div class="l">Projects</div></div>
     <div class="card st"><div class="v">${p.projects.filter(x=>x.session_count>0).length}</div><div class="l">Active</div></div>`;
   let h='';
   for(const proj of p.projects){
     const al=proj.allowlist_count||0,fo=proj.free_only||false;
-    h+=`<div class="card" style="margin-bottom:8px">
+    const pc2=pc[proj.name]||{};
+    const loc=pc2.location||'';
+    const lastSess=proj.sessions&&proj.sessions.length?proj.sessions[proj.sessions.length-1]:null;
+    const lastActive=lastSess?lastSess.logged_at||lastSess.date||'':'';
+    h+=`<div class="card" style="margin-bottom:8px;cursor:pointer" onclick="openProjDetail('${escv(proj.name)}')"
+         onmouseenter="this.style.borderColor='var(--blue)'" onmouseleave="this.style.borderColor='var(--border)'">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
         <div>
-          <div style="font-weight:600;color:#fff;font-size:14px">${esc(proj.name)}</div>
-          <div style="font-size:11px;color:var(--muted);margin-top:3px">${proj.session_count} sessions · ${proj.task_count||0} tasks</div>
+          <div style="font-weight:600;color:#fff;font-size:14px">📁 ${esc(proj.name)}</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:3px">
+            ${proj.session_count} sessions · ${proj.task_count||0} tasks
+            ${lastActive?' · <span style="color:var(--green)">Last: '+esc(lastActive)+'</span>':''}
+          </div>
           <div style="margin-top:5px">
             ${al?`<span class="pill g">${al} whitelisted</span>`:''}
             ${fo?`<span class="pill b">FREE ONLY</span>`:''}
             ${!al&&!fo?`<span style="font-size:11px;color:var(--muted)">All models allowed</span>`:''}
+            ${loc?`<span style="font-size:10px;color:var(--muted);margin-left:6px;font-family:monospace">${esc(loc)}</span>`:''}
           </div>
+          ${lastSess?`<div style="font-size:11px;color:var(--muted);margin-top:4px">Last task: <span style="color:var(--blue)">${esc(lastSess.task||'')}</span> (${esc(lastSess.status||'')})</div>`:''}
         </div>
-        <div style="display:flex;gap:4px;flex-shrink:0">
-          <button class="btn btn-y btn-xs" onclick="openProjConfig('${escv(proj.name)}')">${al?'Edit':'Set'} Allowlist</button>
+        <div style="display:flex;gap:4px;flex-shrink:0" onclick="event.stopPropagation()">
+          <button class="btn btn-y btn-xs" onclick="openProjConfig('${escv(proj.name)}')">⚙ Model Config</button>
           <button class="btn btn-xs" onclick="togProjFree('${escv(proj.name)}',${!fo})">${fo?'Disable':'Enable'} Free-Only</button>
         </div>
       </div></div>`;
@@ -757,8 +788,9 @@ function renderDocTab(){
   const preview=document.getElementById('docPreview');
   const sessionsArea=document.getElementById('docSessionsArea');
   const filesArea=document.getElementById('docFilesArea');
+  const agentArea=document.getElementById('docAgentArea');
   const editorArea=document.getElementById('docEditorArea');
-  sessionsArea.style.display='none';filesArea.style.display='none';
+  sessionsArea.style.display='none';filesArea.style.display='none';agentArea.style.display='none';
   if(curDocTab==='sessions'){
     editorArea.style.display='none';sessionsArea.style.display='block';
     const tbody=document.getElementById('projSessionsBody');
@@ -768,6 +800,9 @@ function renderDocTab(){
   }
   if(curDocTab==='files'){
     editorArea.style.display='none';filesArea.style.display='block';renderProjFiles();return;
+  }
+  if(curDocTab==='agent'){
+    editorArea.style.display='none';agentArea.style.display='block';renderAgentTab();return;
   }
   editorArea.style.display='block';
   const dm={state:'STATE.md',roadmap:'ROADMAP.md',context:'CONTEXT.md',notes:'NOTES.md'};
@@ -862,6 +897,35 @@ function renderMd(md){
     .replace(/^- (.+)$/gm,'<li style="margin:3px 0 3px 16px">$1</li>')
     .replace(/\n\n/g,'</p><p style="margin:8px 0">').replace(/\n/g,'<br>');
   return '<p style="margin:8px 0">'+h+'</p>';
+}
+
+// ── AGENT / MANAGER TAB ──
+function renderAgentTab(){
+  const state=D.projectState;
+  if(!state||!state.sessions)return;
+  const sessions=state.sessions;
+  const lastSess=sessions.length?sessions[sessions.length-1]:null;
+  document.getElementById('mgStatus').innerHTML='<span class="pill g">Active</span>';
+  document.getElementById('mgSession').textContent=lastSess?'session_'+state.name:'—';
+  document.getElementById('mgTask').textContent=lastSess?lastSess.task||'—':'—';
+  document.getElementById('mgModel').textContent=lastSess?lastSess.model||'—':'—';
+  document.getElementById('mgSubCount').textContent=lastSess?'0 (tracking not yet live)':'—';
+
+  // Build sub-agent tree from session context
+  let treeHtml='';
+  if(sessions.length){
+    treeHtml+='<div style="margin-bottom:4px;color:var(--green)">📁 Project: '+esc(state.name)+'</div>';
+    for(let i=0;i<Math.min(sessions.length,15);i++){
+      const s=sessions[i];
+      const icon=s.status==='complete'||s.status==='done'?'✅':s.status==='in_progress'?'🔄':'❌';
+      const depth=i>0?'&nbsp;&nbsp;├─ ':'&nbsp;&nbsp;└─ ';
+      treeHtml+='<div style="padding-left:'+Math.min(i*16,48)+'px">'+depth+icon+' '+esc(s.task||'')+' <span style="color:var(--muted);font-size:10px">('+esc(s.model||'')+' | '+esc(s.duration||'')+')</span></div>';
+    }
+    if(sessions.length>15)treeHtml+='<div style="padding-left:48px;color:var(--muted)">... and '+(sessions.length-15)+' more</div>';
+  } else {
+    treeHtml='<div style="color:var(--muted)">No sessions recorded.</div>';
+  }
+  document.getElementById('subAgentTree').innerHTML=treeHtml;
 }
 
 // ── INIT ──

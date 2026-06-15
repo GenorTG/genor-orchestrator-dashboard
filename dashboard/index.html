@@ -896,14 +896,21 @@ async function pollLiveAgents() {
       $('tbGateway').textContent = Array.isArray(s) ? s.length : (s.count || 0);
     }
     // Simulate activity event from the live-agents data
-    const ev = [{
-      ts: data.last_updated || new Date().toISOString(),
-      reason: data.reason || 'poll',
-      agents: data.agents || [],
-      agent_count: data.agent_count || 0,
-      active_count: data.active_count || 0,
-    }];
-    DS.activity = [...ev, ...(DS.activity || [])].slice(0, 500);
+    const newTs = data.last_updated || new Date().toISOString();
+    // Dedup: skip if the same timestamp as the most recent event
+    const lastEv = (DS.activity || [])[0];
+    if (lastEv && lastEv.ts === newTs && lastEv.reason === (data.reason || 'poll')) {
+      // No change — skip pushing a duplicate
+    } else {
+      const ev = [{
+        ts: newTs,
+        reason: data.reason || 'poll',
+        agents: data.agents || [],
+        agent_count: data.agent_count || 0,
+        active_count: data.active_count || 0,
+      }];
+      DS.activity = [...ev, ...(DS.activity || [])].slice(0, 500);
+    }
     if (typeof renderActivityFeed === 'function') renderActivityFeed();
     // Don't override hText here — initLoad/refreshAll set it from /api/all
     $('hDot').className = 'status-dot on';

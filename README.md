@@ -1,12 +1,15 @@
-# ⛔ DEPRECATED
+# 🗂️ genor-orchestrator-dashboard
 
-Everything has been consolidated into the **genor-orchestrator-plugin** repository:
+**DEPRECATED — consolidated into [genor-orchestrator-plugin](https://github.com/GenorTG/genor-orchestrator-plugin)**
 
-**`~/projects/genor-orchestrator-plugin/`**
+This was originally split into a separate "skill" repo by mistake. The dashboard
+is a UI sidecar for the plugin, not a standalone skill. Everything now lives in
+the plugin repo:
 
-- Dashboard: `dashboard/`
-- SKILL.md: `SKILL.md`
-- References: `references/`
-- Scripts: `scripts/`
+| What | Where |
+|------|-------|
+| Dashboard web app | `genor-orchestrator-plugin/dashboard/` |
+| Server | `genor-orchestrator-plugin/dashboard/server.py` |
+| PM2 | Runs `serve.sh` from plugin repo |
 
-This repo is kept for reference only and will be removed.
+Kept for history. Will be removed.
